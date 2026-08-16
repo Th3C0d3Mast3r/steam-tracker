@@ -12,6 +12,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+load_css()
 
 games=get_games()
 
