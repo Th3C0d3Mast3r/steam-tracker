@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Steam Tracker - Game Price & Deal Tracker</title>
+  <meta name="description" content="Track Steam game prices, discount alerts, and price history with client-side IndexedDB storage." />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Chart.js for Price History -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- App Stylesheet -->
+  <link rel="stylesheet" href="/static/css/styles.css" />
+</head>
+<body>
+
+  <!-- Navigation Header -->
+  <header>
+    <div class="container header-content">
+      <a href="/" class="logo">
+        <div class="logo-icon">◉</div>
+        <span>Steam Tracker</span>
+      </a>
+
+      <div class="header-actions">
+        <button id="btnOpenSearch" class="btn btn-steam">
+          <span>🔍</span> Track Game
+        </button>
+        <button id="btnRefreshAll" class="btn btn-secondary" title="Refresh all game prices live from Steam">
+          <span>↻</span> Refresh All
+        </button>
+        <button id="btnExportData" class="btn btn-secondary" title="Backup tracked data to JSON">
+          <span>📥</span> Export
+        </button>
+        <button id="btnImportData" class="btn btn-secondary" title="Restore tracked data from JSON backup">
+          <span>📤</span> Import
+        </button>
+        <input type="file" id="fileImportInput" accept=".json" style="display: none;" />
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="container">
+    
+    <!-- Hero / Stats Dashboard -->
+    <section class="hero-section">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">🎮</div>
+          <div class="stat-info">
+            <h4>Total Tracked</h4>
+            <div class="stat-value" id="statTotalTracked">0</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon green">🏷️</div>
+          <div class="stat-info">
+            <h4>Games On Sale</h4>
+            <div class="stat-value" id="statOnSale">0</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon green">💰</div>
+          <div class="stat-info">
+            <h4>Potential Savings</h4>
+            <div class="stat-value" id="statSavings">₹0.00</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon amber">🎯</div>
+          <div class="stat-info">
+            <h4>Targets Met</h4>
+            <div class="stat-value" id="statTargetMet">0</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Filter & Sort Bar -->
+    <section class="controls-bar">
+      <div class="filter-group">
+        <button class="filter-btn active" data-filter="all">All Games</button>
+        <button class="filter-btn" data-filter="target_met">🎯 Target Met</button>
+        <button class="filter-btn" data-filter="on_sale">🔥 On Sale</button>
+      </div>
+
+      <div class="sort-group">
+        <label for="sortSelect" style="font-size:0.85rem; color: var(--text-muted); font-weight:600;">Sort By:</label>
+        <select id="sortSelect" class="select-input">
+          <option value="discount_desc">Highest Discount %</option>
+          <option value="price_asc">Price: Low to High</option>
+          <option value="price_desc">Price: High to Low</option>
+          <option value="title_asc">Name: A to Z</option>
+          <option value="date_added">Recently Added</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Tracked Games Cards Grid -->
+    <section id="gamesGrid" class="games-grid"></section>
+
+    <!-- Empty State -->
+    <section id="emptyState" class="empty-state" style="display: none;">
+      <div class="empty-icon">🎮</div>
+      <h3>No Tracked Games Found</h3>
+      <p>Start tracking your favorite Steam games to monitor live discounts and price drops.</p>
+      <button class="btn btn-primary" onclick="document.getElementById('btnOpenSearch').click()">
+        🔍 Add First Game
+      </button>
+    </section>
+  </main>
+
+  <!-- Search & Add Game Modal -->
+  <div id="searchModal" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3>Search Steam Store</h3>
+        <button id="btnCloseSearchModal" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="search-box-wrap">
+          <span class="search-icon-inside">🔍</span>
+          <input type="text" id="searchInput" placeholder="Search for a game (e.g. Witcher, Red Dead, Cyberpunk)..." autocomplete="off" />
+        </div>
+        <div id="searchSpinner" class="spinner" style="display: none; margin: 20px auto;"></div>
+        <div id="searchResultsList" class="search-results-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Target Price Modal -->
+  <div id="editTargetModal" class="modal-overlay">
+    <div class="modal-container" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3>Edit Target Price</h3>
+        <button id="btnCloseEditTargetModal" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="formEditTarget">
+          <p id="editTargetGameTitle" style="font-weight: 700; color: var(--accent-cyan); margin-bottom: 16px;"></p>
+          <div class="form-group">
+            <label for="editTargetInput">New Alert Target Price (₹):</label>
+            <input type="number" id="editTargetInput" class="form-control" step="0.01" min="0" required />
+          </div>
+          <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px;">
+            <button type="button" class="btn btn-secondary" onclick="document.getElementById('btnCloseEditTargetModal').click()">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Target</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Price History Modal -->
+  <div id="historyModal" class="modal-overlay">
+    <div class="modal-container" style="max-width: 720px;">
+      <div class="modal-header">
+        <h3 id="historyGameTitle">Price History</h3>
+        <button id="btnCloseHistoryModal" class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="position: relative; height: 350px; width: 100%;">
+          <canvas id="historyCanvas"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Application Scripts -->
+  <script src="/static/js/db.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
